@@ -1,0 +1,18 @@
+[project]
+name = "nomad_bluesky_writer"
+classifiers = [
+    "Programming Language :: Python :: 3.12",
+]
+description = "Testing the nomad API for how we should push our bluesky documents."
+dependencies = []
+dynamic = ["version"]
+license.file = "LICENSE"
+readme = "README.md"
+requires-python = ">=3.12"
+
+[project.urls]
+GitHub = "https://github.com/evalott100/NomadBlueskyTesting"
+
+[[project.authors]]
+email = "evalott100@gmail.com"
+name = "Eva Lott"
