@@ -1,25 +1,18 @@
-from typing import Any
-import psutil
-import tempfile
-import pprint
-import logging
-import zipfile
 import io
+import json
+import pprint
+import tempfile
+import zipfile
 from pathlib import Path
+from typing import Any
+
+import psutil
 import requests
-import os
 
-
-def _get_environment_variable(name: str) -> str:
-    if (variable := os.environ.get(name)) is None:
-        raise ValueError(f"`{name}` environment variable not found.")
-    return variable
-
+from .environment import NOMAD_API_TOKEN, NOMAD_API_URL
+from .logger import logger
 
 DEFAULT_TIMEOUT = 10.0
-
-NOMAD_API_TOKEN = _get_environment_variable("NOMAD_API_TOKEN")
-NOMAD_API_URL = _get_environment_variable("NOMAD_API_URL")
 
 
 def create_dataset(
@@ -66,8 +59,42 @@ def create_upload(
     ).json()
 
 
+def add_dictionary_to_upload(
+    name: str,
+    data: dict[Any, Any],
+    parent_upload_uid: str | None,
+    timeout=DEFAULT_TIMEOUT,
+    nomad_url: str = NOMAD_API_URL,
+    nomad_token: str = NOMAD_API_TOKEN,
+):
+    """Add the python dictionary `data` to the upload."""
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        # Serialize the dictionary to JSON and write it to the zip in memory
+        json_bytes = json.dumps(data).encode("utf-8")
+        zip_file.writestr(f"{name}.json", json_bytes)
+    zip_buffer.seek(0)
+
+    try:
+        response = requests.put(
+            f"{nomad_url}uploads/{parent_upload_uid}raw/{name}",
+            headers={
+                "Authorization": f"Bearer {nomad_token}",
+                "Accept": "application/json",
+            },
+            data=zip_buffer,
+            timeout=timeout,
+        ).json()
+
+        logger.debug(pprint.pformat(response))
+        return response
+
+    finally:
+        zip_buffer.close()
+
+
 def add_file_to_upload(
-    zip_name: str,
+    name: str,
     upload_path: Path,
     parent_upload_uid: str | None,
     timeout=DEFAULT_TIMEOUT,
@@ -78,6 +105,7 @@ def add_file_to_upload(
 
     If parent_upload_name is `None` then the root directory will be used.
     """
+
     parent_upload_uid = "" if parent_upload_uid is None else f"{parent_upload_uid}/"
 
     file_size = upload_path.stat().st_size
@@ -94,7 +122,7 @@ def add_file_to_upload(
 
     try:
         response = requests.put(
-            f"{nomad_url}uploads/{parent_upload_uid}raw/{zip_name}",
+            f"{nomad_url}uploads/{parent_upload_uid}raw/{name}",
             headers={
                 "Authorization": f"Bearer {nomad_token}",
                 "Accept": "application/json",
@@ -103,7 +131,7 @@ def add_file_to_upload(
             timeout=timeout,
         ).json()
 
-        logging.debug(pprint.pformat(response))
+        logger.debug(pprint.pformat(response))
         return response
 
     finally:
@@ -136,7 +164,7 @@ def add_upload_metadata(
             "Authorization": f"Bearer {nomad_token}",
             "Accept": "application/json",
         },
-        json=metadata,
+        json={"metadata": metadata} if metadata else None,
         timeout=timeout,
     ).json()
 

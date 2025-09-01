@@ -1,12 +1,9 @@
 [project]
-name = "nomad_bluesky_writer"
-classifiers = [
-    "Programming Language :: Python :: 3.12",
-]
+name = "nomad-bluesky-writer"
+classifiers = ["Programming Language :: Python :: 3.12"]
 description = "Testing the nomad API for how we should push our bluesky documents."
-dependencies = ["event-model", "requests"]
+dependencies = ["event-model", "requests", "bluesky"]
 dynamic = ["version"]
-license.file = "LICENSE"
 readme = "README.md"
 requires-python = ">=3.12"
 
