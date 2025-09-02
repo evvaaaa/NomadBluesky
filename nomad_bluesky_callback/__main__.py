@@ -1,7 +1,8 @@
-import os
 import argparse
-from nomad_bluesky_writer.logger import logger
+import os
+
 from nomad_bluesky_writer.document_callback import NomadCallback
+from nomad_bluesky_writer.logger import logger
 
 
 def main():

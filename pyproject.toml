@@ -2,7 +2,7 @@
 name = "nomad-bluesky-callback"
 classifiers = ["Programming Language :: Python :: 3.12"]
 description = "Testing the nomad API for how we should push our bluesky documents."
-dependencies = ["event-model", "requests", "bluesky"]
+dependencies = ["event-model", "requests", "bluesky", "psutil"]
 dynamic = ["version"]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,3 +13,6 @@ GitHub = "https://github.com/evalott100/NomadBlueskyCallback"
 [[project.authors]]
 email = "evalott100@gmail.com"
 name = "Eva Lott"
+
+[project.optional-dependencies]
+dev = ["ruff", "ophyd-async"]

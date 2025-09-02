@@ -1,6 +1,6 @@
 import queue
 import typing
-from threading import Thread
+import threading
 
 from bluesky.callbacks.zmq import RemoteDispatcher
 from event_model.documents import (
@@ -32,6 +32,8 @@ Document = (
     | StreamResource
 )
 
+KILL_SIGNAL: None = None
+
 
 class NomadCallback:
     def __init__(
@@ -41,14 +43,17 @@ class NomadCallback:
         self.NOMAD_API_TOKEN: str = nomad_api_token
         self.ZMQ_ADDRESS: str | None = zmq_address
 
-        self._document_queue: queue.Queue[tuple[str, Document]] = queue.Queue()
+        self._document_queue: queue.Queue[tuple[str, Document] | None] = queue.Queue()
 
         # The uid of the run to the upload
         self._run_start_to_upload: dict[str, str] = {}
 
         # The uid of the event descriptor to the uid of the run start.
         # Seperate so that we know to remove from cache after run stop comes in.
-        self._event_descriptor_to_run_start: dict[str, str] = {}
+        self._descriptor_to_run_start: dict[str, str] = {}
+
+        self._serve_thread: threading.Thread | None = None
+        self._kill_signal = threading.Event()
 
     def __call__(self, name: str, document: Document):
         if self._serve_thread is None:
@@ -66,13 +71,16 @@ class NomadCallback:
 
     def _serve(self):
         while True:
-            name, document = self._document_queue.get()
+            popped = self._document_queue.get()
+            if popped is None:
+                break
+            name, document = popped
             self.send_document(name, document)
 
     def serve(self, zmq_address: str | None = None):
         """Starts `_serve` in a different thread and if provided will listen on `zmq_address` for new documents to send."""
 
-        self._serve_thread = Thread(target=self._serve, daemon=True)
+        self._serve_thread = threading.Thread(target=self._serve, daemon=True)
         self._serve_thread.start()
 
         if zmq_address:
@@ -81,17 +89,26 @@ class NomadCallback:
 
         # If no `zmq_address` is provided then documents can be sent from this thread with `__call__`.
 
+    def join(self):
+        """If using directly subscribed to the `RunEngine` instead of as a service, then it may finish while the queue has elements.
+
+        We use a kill signal and a join to keep the thread alive until it's finished processing all documents.
+        """
+        if self._serve_thread:
+            self._document_queue.put(KILL_SIGNAL)
+            self._serve_thread.join()
+
     def send_document(self, name: str, document: Document):
         # TODO: convert the document from dictionary to subclasses of event-model basemodels containing
         # our experiment metadata. Then we'd match here by those classes.
 
         match name:
-            case "run_start":
+            case "start":
                 self.upload_run_start(typing.cast(RunStart, document))
-            case "run_stop":
+            case "stop":
                 self.upload_run_stop(typing.cast(RunStop, document))
-            case "event_descriptor":
-                self.upload_event_descriptor(typing.cast(EventDescriptor, document))
+            case "descriptor":
+                self.upload_descriptor(typing.cast(EventDescriptor, document))
             case "event":
                 self.upload_event(typing.cast(Event, document))
             case _:
@@ -108,40 +125,40 @@ class NomadCallback:
         self._run_start_to_upload[document["uid"]] = upload_id
 
         add_dictionary_to_upload(
-            f"{document['time']}_run_start",
+            f"{document['time']}_start",
             typing.cast(dict, document),
             upload_id,
             self.NOMAD_API_URL,
             self.NOMAD_API_TOKEN,
         )
         logger.info(
-            f"Added `run_start` document `{document['uid']}` to upload `{upload_id}`."
+            f"Added `start` document `{document['uid']}` to upload `{upload_id}`."
         )
 
     def upload_run_stop(self, document: RunStop):
         upload_id = self._run_start_to_upload.pop(document["run_start"])
-        for event_descriptor_uid in [
-            d for d, s in self._event_descriptor_to_run_start.items() if s == upload_id
+        for descriptor_uid in [
+            d for d, s in self._descriptor_to_run_start.items() if s == upload_id
         ]:
-            del self._event_descriptor_to_run_start[event_descriptor_uid]
+            del self._descriptor_to_run_start[descriptor_uid]
 
         add_dictionary_to_upload(
-            f"{document['time']}_run_stop",
+            f"{document['time']}_stop",
             typing.cast(dict, document),
             upload_id,
             self.NOMAD_API_URL,
             self.NOMAD_API_TOKEN,
         )
         logger.debug(
-            f"Added `run_stop` document `{document['uid']}` to upload `{upload_id}`."
+            f"Added `stop` document `{document['uid']}` to upload `{upload_id}`."
         )
 
-    def upload_event_descriptor(self, document: EventDescriptor):
-        self._event_descriptor_to_run_start[document["uid"]] = document["run_start"]
+    def upload_descriptor(self, document: EventDescriptor):
+        self._descriptor_to_run_start[document["uid"]] = document["run_start"]
         upload_id = self._run_start_to_upload[document["run_start"]]
 
         add_dictionary_to_upload(
-            f"{document['time']}_event_descriptor",
+            f"{document['time']}_descriptor",
             typing.cast(dict, document),
             upload_id,
             self.NOMAD_API_URL,
@@ -153,7 +170,7 @@ class NomadCallback:
 
     def upload_event(self, document: Event):
         upload_id = self._run_start_to_upload[
-            self._event_descriptor_to_run_start[document["descriptor"]]
+            self._descriptor_to_run_start[document["descriptor"]]
         ]
 
         add_dictionary_to_upload(
