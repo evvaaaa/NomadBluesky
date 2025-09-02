@@ -9,7 +9,6 @@ from typing import Any
 import psutil
 import requests
 
-from .environment import NOMAD_API_TOKEN, NOMAD_API_URL
 from .logger import logger
 
 DEFAULT_TIMEOUT = 10.0
@@ -17,16 +16,16 @@ DEFAULT_TIMEOUT = 10.0
 
 def create_dataset(
     dataset_name: str,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    nomad_url: str,
+    nomad_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
     """
     Create a new "dataset".
 
     The dataset contains upload.
     """
-    return requests.post(
+    response = requests.post(
         f"{nomad_url}datasets/",
         headers={
             "Authorization": f"Bearer {nomad_token}",
@@ -34,14 +33,19 @@ def create_dataset(
         },
         json={"dataset_name": dataset_name},
         timeout=timeout,
-    ).json()
+    )
+    response.raise_for_status()
+
+    response_json = response.json()
+    logger.debug(f"create_dataset: {pprint.pformat(response_json)}")
+    return response_json
 
 
 def create_upload(
     upload_name: str,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    nomad_url: str,
+    nomad_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ):
     """
     Create a new "upload".
@@ -49,45 +53,56 @@ def create_upload(
     The upload created in this class is a directory containing other uploads.
     """
 
-    return requests.post(
+    response = requests.post(
         f"{nomad_url}uploads?upload_name={upload_name}",
         headers={
             "Authorization": f"Bearer {nomad_token}",
             "Accept": "application/json",
         },
         timeout=timeout,
-    ).json()
+    )
+    response.raise_for_status()
+
+    response_json = response.json()
+    logger.debug(f"create_upload: {pprint.pformat(response_json)}")
+    return response_json
 
 
 def add_dictionary_to_upload(
     name: str,
     data: dict[Any, Any],
-    parent_upload_uid: str | None,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    upload_uid: str,
+    nomad_url: str,
+    nomad_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ):
-    """Add the python dictionary `data` to the upload."""
+    """Add the python dictionary `data`, as a .json, to the upload."""
+
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
         # Serialize the dictionary to JSON and write it to the zip in memory
         json_bytes = json.dumps(data).encode("utf-8")
         zip_file.writestr(f"{name}.json", json_bytes)
     zip_buffer.seek(0)
+    with open("hahaha.zip", "wb") as f:
+        f.write(zip_buffer.read())
 
+    zip_buffer.seek(0)
     try:
         response = requests.put(
-            f"{nomad_url}uploads/{parent_upload_uid}raw/{name}",
+            f"{nomad_url}uploads/{upload_uid}/raw/{name}",
             headers={
                 "Authorization": f"Bearer {nomad_token}",
                 "Accept": "application/json",
             },
             data=zip_buffer,
             timeout=timeout,
-        ).json()
+        )
+        response.raise_for_status()
 
-        logger.debug(pprint.pformat(response))
-        return response
+        response_json = response.json()
+        logger.debug(f"add_dictionary_to_upload: {pprint.pformat(response_json)}")
+        return response_json
 
     finally:
         zip_buffer.close()
@@ -96,43 +111,43 @@ def add_dictionary_to_upload(
 def add_file_to_upload(
     name: str,
     upload_path: Path,
-    parent_upload_uid: str | None,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    upload_uid: str,
+    nomad_url: str,
+    nomad_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ):
     """Upload a single file under the `parent_upload_name` upload.
 
     If parent_upload_name is `None` then the root directory will be used.
     """
 
-    parent_upload_uid = "" if parent_upload_uid is None else f"{parent_upload_uid}/"
-
+    # Hold zip in memory if the file is small enough, else temporarily store it on disk
     file_size = upload_path.stat().st_size
     memory_left = psutil.virtual_memory().available
-
     if memory_left >= file_size:
         zip_buffer = io.BytesIO()
     else:
         zip_buffer = tempfile.NamedTemporaryFile(delete_on_close=True)
 
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        zip_file.write(str(upload_path), arcname=upload_path.name)
-    zip_buffer.seek(0)
-
     try:
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+            zip_file.write(str(upload_path), arcname=upload_path.name)
+        zip_buffer.seek(0)
+
         response = requests.put(
-            f"{nomad_url}uploads/{parent_upload_uid}raw/{name}",
+            f"{nomad_url}uploads/{upload_uid}/raw/{name}",
             headers={
                 "Authorization": f"Bearer {nomad_token}",
                 "Accept": "application/json",
             },
             data=zip_buffer,
             timeout=timeout,
-        ).json()
+        )
+        response.raise_for_status()
 
-        logger.debug(pprint.pformat(response))
-        return response
+        response_json = response.json()
+        logger.debug(f"add_file_to_upload: {pprint.pformat(response_json)}")
+        return response_json
 
     finally:
         zip_buffer.close()
@@ -140,25 +155,30 @@ def add_file_to_upload(
 
 def check_upload_status(
     upload_id: str,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    nomad_url: str,
+    nomad_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
-    return requests.get(
+    response = requests.get(
         f"{nomad_url}uploads/{upload_id}",
         headers={"Authorization": f"Bearer {nomad_token}"},
         timeout=timeout,
-    ).json()
+    )
+    response.raise_for_status()
+
+    response_json = response.json()
+    logger.debug(f"check_upload_status: {pprint.pformat(response_json)}")
+    return response_json
 
 
 def add_upload_metadata(
     upload_id: str,
     metadata: dict,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    nomad_url: str,
+    nomad_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
-    return requests.post(
+    response = requests.post(
         f"{nomad_url}uploads/{upload_id}/edit",
         headers={
             "Authorization": f"Bearer {nomad_token}",
@@ -166,16 +186,21 @@ def add_upload_metadata(
         },
         json={"metadata": metadata} if metadata else None,
         timeout=timeout,
-    ).json()
+    )
+    response.raise_for_status()
+
+    response_json = response.json()
+    logger.debug(f"add_upload_metadata: {pprint.pformat(response_json)}")
+    return response_json
 
 
 def query(
     query_fields: list[str],
+    nomad_url: str,
+    nomad_token: str,
     page_size=1,
     required: list[str] | None = None,
-    timeout=DEFAULT_TIMEOUT,
-    nomad_url: str = NOMAD_API_URL,
-    nomad_token: str = NOMAD_API_TOKEN,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
     query = {
         "query": {"all": query_fields},
@@ -184,7 +209,7 @@ def query(
     if required:
         query.update({"required": {"include": required}})
 
-    return requests.post(
+    response = requests.post(
         f"{nomad_url}/entries/query",
         json=query,
         headers={
@@ -192,19 +217,24 @@ def query(
             "Accept": "application/json",
         },
         timeout=timeout,
-    ).json()
+    )
+    response.raise_for_status()
 
-    # TODO:
-    # This could be used for automatically publishing data to a central nomad service...
-    # It could be nice if we have already created a user for the data in question but currently we don't have
-    # a central nomad service. We can play around with it in future.
-    # def publish_upload(
-    #     upload_id: str,
-    timeout = (DEFAULT_TIMEOUT,)
+    response_json = response.json()
+    logger.debug(f"query: {pprint.pformat(response_json)}")
+    return response_json
 
 
-#     nomad_url: str = NOMAD_API_URL,
-#     nomad_token: str = NOMAD_API_TOKEN,
+# TODO:
+# This could be used for automatically publishing data to a central nomad service...
+# It could be nice if we have already created a user for the data in question but currently we don't have
+# a central nomad service. We can play around with it in future.
+
+# def publish_upload(
+#     upload_id: str,
+#     nomad_url: str,
+#     nomad_token: str,
+#     timeout=DEFAULT_TIMEOUT,
 # ) -> dict[str, Any]:
 #     return requests.post(
 #         f"{nomad_url}uploads/{upload_id}/action/publish",
