@@ -1,5 +1,5 @@
 [project]
-name = "nomad-bluesky-writer"
+name = "nomad-bluesky-callback"
 classifiers = ["Programming Language :: Python :: 3.12"]
 description = "Testing the nomad API for how we should push our bluesky documents."
 dependencies = ["event-model", "requests", "bluesky"]
@@ -8,7 +8,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 
 [project.urls]
-GitHub = "https://github.com/evalott100/NomadBlueskyTesting"
+GitHub = "https://github.com/evalott100/NomadBlueskyCallback"
 
 [[project.authors]]
 email = "evalott100@gmail.com"
