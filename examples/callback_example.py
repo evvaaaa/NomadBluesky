@@ -1,4 +1,3 @@
-# Import bluesky and ophyd
 import os
 
 from bluesky import RunEngine

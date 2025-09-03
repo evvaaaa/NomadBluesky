@@ -78,16 +78,15 @@ def add_dictionary_to_upload(
 ):
     """Add the python dictionary `data`, as a .json, to the upload."""
 
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        # Serialize the dictionary to JSON and write it to the zip in memory
-        json_bytes = json.dumps(data).encode("utf-8")
-        zip_file.writestr(f"{name}.json", json_bytes)
-    zip_buffer.seek(0)
-    with open("hahaha.zip", "wb") as f:
-        f.write(zip_buffer.read())
-
-    zip_buffer.seek(0)
+    # zip_buffer = io.BytesIO()
+    # with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+    #     # Serialize the dictionary to JSON and write it to the zip in memory
+    #     json_bytes = json.dumps(data).encode("utf-8")
+    #     zip_file.writestr(f"{name}.json", json_bytes)
+    #
+    # zip_buffer.seek(0)
+    #
+    json_bytes = json.dumps(data).encode("utf-8")
     try:
         response = requests.put(
             f"{nomad_url}uploads/{upload_uid}/raw/{name}",
@@ -95,7 +94,7 @@ def add_dictionary_to_upload(
                 "Authorization": f"Bearer {nomad_token}",
                 "Accept": "application/json",
             },
-            data=zip_buffer,
+            data=json_bytes,
             timeout=timeout,
         )
         response.raise_for_status()
@@ -105,7 +104,7 @@ def add_dictionary_to_upload(
         return response_json
 
     finally:
-        zip_buffer.close()
+        ...
 
 
 def add_file_to_upload(
