@@ -1,12 +1,10 @@
-# Import bluesky and ophyd
 import os
 
+from nomad_bluesky.callback import NomadCallback
 from bluesky import RunEngine
 from bluesky import plan_stubs as bps
 from ophyd_async.core import init_devices
 from ophyd_async.epics import demo, testing
-
-from nomad_bluesky_callback import NomadCallback
 
 NOMAD_API_URL = os.environ["NOMAD_API_URL"]
 NOMAD_API_TOKEN = os.environ["NOMAD_API_TOKEN"]

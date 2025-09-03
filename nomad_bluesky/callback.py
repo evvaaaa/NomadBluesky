@@ -32,8 +32,6 @@ Document = (
     | StreamResource
 )
 
-KILL_SIGNAL: None = None
-
 
 class NomadCallback:
     def __init__(
@@ -53,7 +51,6 @@ class NomadCallback:
         self._descriptor_to_run_start: dict[str, str] = {}
 
         self._serve_thread: threading.Thread | None = None
-        self._kill_signal = threading.Event()
 
     def __call__(self, name: str, document: Document):
         if self._serve_thread is None:
@@ -72,7 +69,7 @@ class NomadCallback:
     def _serve(self):
         while True:
             popped = self._document_queue.get()
-            if popped is None:
+            if popped is None:  # None is used as the kill signal
                 break
             name, document = popped
             self.send_document(name, document)
@@ -95,7 +92,7 @@ class NomadCallback:
         We use a kill signal and a join to keep the thread alive until it's finished processing all documents.
         """
         if self._serve_thread:
-            self._document_queue.put(KILL_SIGNAL)
+            self._document_queue.put(None)
             self._serve_thread.join()
 
     def send_document(self, name: str, document: Document):

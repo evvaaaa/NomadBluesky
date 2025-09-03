@@ -54,7 +54,7 @@ def create_upload(
     """
 
     response = requests.post(
-        f"{nomad_url}uploads?upload_name={upload_name}",
+        f"{nomad_url}/uploads?upload_name={upload_name}",
         headers={
             "Authorization": f"Bearer {nomad_token}",
             "Accept": "application/json",
@@ -83,29 +83,22 @@ def add_dictionary_to_upload(
         # Serialize the dictionary to JSON and write it to the zip in memory
         json_bytes = json.dumps(data).encode("utf-8")
         zip_file.writestr(f"{name}.json", json_bytes)
-    zip_buffer.seek(0)
-    with open("hahaha.zip", "wb") as f:
-        f.write(zip_buffer.read())
 
     zip_buffer.seek(0)
-    try:
-        response = requests.put(
-            f"{nomad_url}uploads/{upload_uid}/raw/{name}",
-            headers={
-                "Authorization": f"Bearer {nomad_token}",
-                "Accept": "application/json",
-            },
-            data=zip_buffer,
-            timeout=timeout,
-        )
-        response.raise_for_status()
+    response = requests.put(
+        f"{nomad_url}/uploads/{upload_uid}/raw/{name}",
+        headers={
+            "Authorization": f"Bearer {nomad_token}",
+            "Accept": "application/json",
+        },
+        data=zip_buffer,
+        timeout=timeout,
+    )
+    response.raise_for_status()
 
-        response_json = response.json()
-        logger.debug(f"add_dictionary_to_upload: {pprint.pformat(response_json)}")
-        return response_json
-
-    finally:
-        zip_buffer.close()
+    response_json = response.json()
+    logger.debug(f"add_dictionary_to_upload: {pprint.pformat(response_json)}")
+    return response_json
 
 
 def add_file_to_upload(
@@ -135,7 +128,7 @@ def add_file_to_upload(
         zip_buffer.seek(0)
 
         response = requests.put(
-            f"{nomad_url}uploads/{upload_uid}/raw/{name}",
+            f"{nomad_url}/uploads/{upload_uid}/raw/{name}",
             headers={
                 "Authorization": f"Bearer {nomad_token}",
                 "Accept": "application/json",
@@ -160,7 +153,7 @@ def check_upload_status(
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
     response = requests.get(
-        f"{nomad_url}uploads/{upload_id}",
+        f"{nomad_url}/uploads/{upload_id}",
         headers={"Authorization": f"Bearer {nomad_token}"},
         timeout=timeout,
     )
@@ -179,7 +172,7 @@ def add_upload_metadata(
     timeout: float = DEFAULT_TIMEOUT,
 ) -> dict[str, Any]:
     response = requests.post(
-        f"{nomad_url}uploads/{upload_id}/edit",
+        f"{nomad_url}/uploads/{upload_id}/edit",
         headers={
             "Authorization": f"Bearer {nomad_token}",
             "Accept": "application/json",
@@ -237,7 +230,7 @@ def query(
 #     timeout=DEFAULT_TIMEOUT,
 # ) -> dict[str, Any]:
 #     return requests.post(
-#         f"{nomad_url}uploads/{upload_id}/action/publish",
+#         f"{nomad_url}/uploads/{upload_id}/action/publish",
 #         headers={
 #             "Authorization": f"Bearer {nomad_token}",
 #             "Accept": "application/json",
