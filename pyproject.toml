@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools_scm[toml]>=8"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "nomad-bluesky"
 classifiers = ["Programming Language :: Python :: 3.12"]
@@ -20,6 +24,9 @@ GitHub = "https://github.com/evalott100/NomadBluesky"
 [[project.authors]]
 email = "evalott100@gmail.com"
 name = "Eva Lott"
+
+[tool.setuptools_scm]
+version_file = "nomad_bluesky/_version.py"
 
 [project.optional-dependencies]
 dev = ["ruff"]

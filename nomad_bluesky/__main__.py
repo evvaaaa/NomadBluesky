@@ -36,10 +36,10 @@ def main():
     zmq_parser = subparsers.add_parser("zmq")
 
     zmq_parser.add_argument(
-        "--zmq-address",
+        "--zmq-url",
         type=str,
-        default=os.environ.get("ZMQ_ADDRESS"),
-        help="ZMQ address (default: from ZMQ_ADDRESS env var)",
+        default=os.environ.get("ZMQ_URL"),
+        help="ZMQ address (default: from ZMQ_URL env var)",
     )
 
     tiled_parser = subparsers.add_parser("tiled")
@@ -80,17 +80,15 @@ def main():
         exit(1)
 
     if args.mode == "zmq":
-        if args.zmq_address is None:
+        if args.zmq_url is None:
             print(
-                "nomad_bluesky zmq: error: the following arguments are required: --zmq-address, "
-                "alternatively set the environment variable ZMQ_ADDRESS"
+                "nomad_bluesky zmq: error: the following arguments are required: --zmq-url, "
+                "alternatively set the environment variable ZMQ_URL"
             )
             exit(1)
-        callback = NomadCallback(
-            args.nomad_api_url, args.nomad_api_token, args.zmq_address
-        )
+        callback = NomadCallback(args.nomad_api_url, args.nomad_api_token, args.zmq_url)
         logger.info(
-            f"Listening on zmq `{args.zmq_address}` and will send data to nomad at `{args.nomad_api_url}`."
+            f"Listening on zmq `{args.zmq_url}` and will send data to nomad at `{args.nomad_api_url}`."
         )
 
         callback.serve()

@@ -1,3 +1,5 @@
+from ._version import __version__ as __version__
+
 from .callback import NomadCallback as NomadCallback
 from .nomad_api import (
     add_dictionary_to_upload as add_dictionary_to_upload,

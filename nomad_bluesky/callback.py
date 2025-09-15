@@ -35,11 +35,11 @@ Document = (
 
 class NomadCallback:
     def __init__(
-        self, nomad_api_url: str, nomad_api_token: str, zmq_address: str | None = None
+        self, nomad_api_url: str, nomad_api_token: str, zmq_url: str | None = None
     ):
         self.NOMAD_API_URL: str = nomad_api_url
         self.NOMAD_API_TOKEN: str = nomad_api_token
-        self.ZMQ_ADDRESS: str | None = zmq_address
+        self.ZMQ_URL: str | None = zmq_url
 
         self._document_queue: queue.Queue[tuple[str, Document] | None] = queue.Queue()
 
@@ -59,8 +59,8 @@ class NomadCallback:
         else:
             self._document_queue.put((name, document))
 
-    def _listen_over_zmq(self, zmq_address: str):
-        dispatcher = RemoteDispatcher(zmq_address)
+    def _listen_over_zmq(self, zmq_url: str):
+        dispatcher = RemoteDispatcher(zmq_url)
         dispatcher.subscribe(
             lambda name, document: self._document_queue.put((name, document))
         )
@@ -74,15 +74,15 @@ class NomadCallback:
             name, document = popped
             self.send_document(name, document)
 
-    def serve(self, zmq_address: str | None = None):
-        """Starts `_serve` in a different thread and if provided will listen on `zmq_address` for new documents to send."""
+    def serve(self):
+        """Starts `_serve` in a different thread and if provided will listen on `zmq_url` for new documents to send."""
 
         self._serve_thread = threading.Thread(target=self._serve, daemon=True)
         self._serve_thread.start()
 
-        if zmq_address:
+        if self.ZMQ_URL:
             # If `zmq_address` then this is blocking and the thread will be busy waiting for new documents over zmq.
-            self._listen_over_zmq(zmq_address)
+            self._listen_over_zmq(self.ZMQ_URL)
 
         # If no `zmq_address` is provided then documents can be sent from this thread with `__call__`.
 
